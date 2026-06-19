@@ -78,6 +78,18 @@ services:
       timeout: 5s
       retries: 20
 
+  adminer:
+    image: laravelvue-app
+    working_dir: /var/www/adminer
+    command: sh -c "test -s index.php || php -r 'file_put_contents(\"index.php\", file_get_contents(\"https://www.adminer.org/latest.php\"));'; php -S 0.0.0.0:8080"
+    ports:
+      - "127.0.0.1:${ADMINER_PORT:-8081}:8080"
+    volumes:
+      - adminer_data:/var/www/adminer
+    depends_on:
+      mysql:
+        condition: service_healthy
+
   redis:
     image: redis:7.4-alpine
     command: redis-server --appendonly yes
@@ -93,3 +105,4 @@ volumes:
   mysql_data:
   redis_data:
   frontend_node_modules:
+  adminer_data:

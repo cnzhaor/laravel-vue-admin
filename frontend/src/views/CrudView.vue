@@ -3,7 +3,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { http } from '../api/http'
 
-type Field = { key: string; label: string; type?: 'text'|'password'|'number'|'switch'|'select'|'textarea'; required?: boolean; multiple?: boolean; optionsEndpoint?: string; options?: {label:string,value:any}[] }
+type Field = { key: string; label: string; type?: 'text'|'password'|'number'|'switch'|'select'|'textarea'|'datetime'; required?: boolean; multiple?: boolean; optionsEndpoint?: string; options?: {label:string,value:any}[] }
 const props = defineProps<{ resource: string }>()
 
 const configs: Record<string, { fields: Field[]; readonly?: boolean }> = {
@@ -24,8 +24,8 @@ const configs: Record<string, { fields: Field[]; readonly?: boolean }> = {
   dictionaries: { fields: [{key:'name',label:'字典名称',required:true},{key:'code',label:'字典编码',required:true},{key:'enabled',label:'启用',type:'switch'},{key:'remark',label:'备注',type:'textarea'}] },
   'dictionary-items': { fields: [{key:'dictionary_id',label:'所属字典',type:'select',required:true,optionsEndpoint:'dictionaries'},{key:'label',label:'显示名称',required:true},{key:'value',label:'字典值',required:true},{key:'sort',label:'排序',type:'number'},{key:'enabled',label:'启用',type:'switch'},{key:'tag_type',label:'标签类型'}] },
   parameters: { fields: [{key:'name',label:'参数名称',required:true},{key:'key',label:'参数键',required:true},{key:'value',label:'参数值',type:'textarea'},{key:'is_public',label:'公开',type:'switch'},{key:'remark',label:'备注',type:'textarea'}] },
-  'operation-logs': { readonly:true, fields:[{key:'method',label:'方法'},{key:'path',label:'路径'},{key:'ip',label:'IP'},{key:'status',label:'状态'},{key:'duration_ms',label:'耗时(ms)'},{key:'created_at',label:'时间'}] },
-  'login-logs': { readonly:true, fields:[{key:'username',label:'用户名'},{key:'success',label:'成功'},{key:'ip',label:'IP'},{key:'message',label:'结果'},{key:'created_at',label:'时间'}] },
+  'operation-logs': { readonly:true, fields:[{key:'method',label:'方法'},{key:'path',label:'路径'},{key:'ip',label:'IP'},{key:'status',label:'状态'},{key:'duration_ms',label:'耗时(ms)'},{key:'created_at',label:'时间',type:'datetime'}] },
+  'login-logs': { readonly:true, fields:[{key:'username',label:'用户名'},{key:'success',label:'成功'},{key:'ip',label:'IP'},{key:'message',label:'结果'},{key:'created_at',label:'时间',type:'datetime'}] },
 }
 
 const config = computed(() => configs[props.resource])
@@ -59,6 +59,21 @@ async function load() {
 }
 
 function open(row?: any) { resetForm(row); dialog.value = true }
+
+function formatDateTime(value?: string) {
+  if (!value) return '-'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return new Intl.DateTimeFormat('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  }).format(date).replaceAll('/', '-')
+}
 
 async function save() {
   for (const field of config.value.fields) {
@@ -97,6 +112,7 @@ onMounted(async () => { await Promise.all([load(), loadOptions()]) })
       <el-table-column v-for="field in config.fields" :key="field.key" :prop="field.key" :label="field.label" min-width="120">
         <template #default="{ row }">
           <el-tag v-if="field.type === 'switch' || typeof row[field.key] === 'boolean'" :type="row[field.key] ? 'success' : 'info'">{{ row[field.key] ? '是' : '否' }}</el-tag>
+          <span v-else-if="field.type === 'datetime'">{{ formatDateTime(row[field.key]) }}</span>
           <span v-else>{{ row[field.key] ?? '-' }}</span>
         </template>
       </el-table-column>

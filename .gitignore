@@ -1,0 +1,11 @@
+.DS_Store
+.env
+backend/.env
+backend/vendor/
+backend/storage/logs/*.log
+backend/storage/framework/cache/data/*
+backend/storage/framework/sessions/*
+backend/storage/framework/views/*
+frontend/node_modules/
+frontend/dist/
+

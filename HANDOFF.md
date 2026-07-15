@@ -1,15 +1,14 @@
 # 项目交接记录
 
-更新时间：2026-06-19（Asia/Shanghai）
+更新时间：2026-07-15（Asia/Shanghai）
 
 ## 仓库信息
 
 - GitHub：<https://github.com/cnzhaor/laravel-vue-admin>
 - 当前分支：`main`
 - 远程分支：`origin/main`
-- 最新已推送提交：`a409f7b feat: add database admin tool and localize log times`
-- 当前未提交改动：`README.md`、`HANDOFF.md`
-- 本地未跟踪缓存：`.pnpm-store/`，不要提交
+- 当前最新提交：`e2143ab feat: 添加抖音返利功能，包括接口配置、控制器、服务和前端页面`
+- 更新本交接文件前工作区干净；更新后仅 `HANDOFF.md` 为未提交改动
 
 ## 当前运行状态
 
@@ -18,6 +17,7 @@ Laravel 13 + Vue 3 通用管理后台已经在 Docker Compose 中正常运行。
 | 服务 | 状态/地址 |
 | --- | --- |
 | 管理后台 | <http://localhost:8080> |
+| 抖音返利 Demo | <http://localhost:8080/marketing/douyin-rebate> |
 | Laravel 健康检查 | <http://localhost:8080/up> |
 | Adminer | <http://localhost:8081>，仅监听 `127.0.0.1` |
 | MySQL | 容器内 `mysql:3306`，健康 |
@@ -52,8 +52,50 @@ Adminer 登录信息：
 - Docker 初始化脚本、健康检查、队列、定时任务和 GitHub Actions
 - Adminer 数据库可视化工具，仅允许本机访问
 - 日志时间按浏览器本地时区格式化显示
+- 抖音电商抖客返利 Demo：口令/短链解析转链、渠道归因、推广素材展示和结算账单查询
+- 抖音 API HMAC-SHA256 签名、业务参数递归排序、密钥后端隔离及 Mock/Live 双模式
 
 ## 本轮处理记录
+
+### 抖音返利 API Demo
+
+新增登录后可访问的「抖音返利 Demo」页面：
+
+- 后端接口：
+  - `GET /api/v1/douyin-rebate/status`
+  - `POST /api/v1/douyin-rebate/convert`
+  - `GET /api/v1/douyin-rebate/bills`
+- 转链接口使用 `buyin.doukeCommandParseAndShare`；
+- 结算账单使用 `buyin.douKeSettleBillList`，按单日查询；
+- `external_info` 只允许数字、字母和下划线，最大 40 个字符，可关联站内用户或推广渠道；
+- 转链和账单接口均增加每分钟 30 次的登录用户限流；
+- AppSecret、AccessToken 和 PID 只从 Laravel 环境配置读取，不暴露给前端；
+- 默认 `DOUYIN_REBATE_MOCK=true`，没有抖客资质和密钥也能完整演示。
+
+主要文件：
+
+```text
+backend/app/Services/DouyinRebateService.php
+backend/app/Http/Controllers/Api/DouyinRebateController.php
+backend/tests/Unit/DouyinRebateServiceTest.php
+frontend/src/views/DouyinRebateView.vue
+```
+
+切换真实接口需要在 `backend/.env` 配置：
+
+```dotenv
+DOUYIN_REBATE_MOCK=false
+DOUYIN_APP_KEY=
+DOUYIN_APP_SECRET=
+DOUYIN_ACCESS_TOKEN=
+DOUYIN_PID=
+```
+
+其中 AccessToken 必须来自「联盟抖客」主体授权，应用还需取得抖客分销转链及账单查询相关权限。修改配置后执行：
+
+```bash
+docker compose exec app php artisan optimize:clear
+```
 
 ### 前端白屏
 
@@ -92,19 +134,22 @@ docker compose restart frontend
 - Adminer 登录成功，可查看 `admin` 数据库中的 22 张表
 - 登录日志已验证显示北京时间，例如 UTC `06:56:23` 显示为 `14:56:23`
 - 前端 `vue-tsc` 和生产构建通过
-- Laravel 测试此前结果：6 个测试通过，8 个断言
+- Laravel 完整测试：8 个测试通过，12 个断言
+- 抖音服务单元测试：2 个测试通过，4 个断言，覆盖递归参数排序和 Mock 渠道归因/推广素材
+- 抖音返利 3 条路由已通过 `php artisan route:list --path=douyin-rebate` 检查
 - PHPUnit 使用内存 SQLite，不会清空开发 MySQL
 
 前端构建存在第三方依赖的 Rolldown annotation 和大体积 chunk 警告，但不影响构建成功。
 
 ## 当前待办
 
-1. 检查并提交已扩充的 `README.md`；
-2. 推送 README/HANDOFF 提交到 `origin/main`；
-3. 将 `.pnpm-store/` 加入 `.gitignore` 或删除本地缓存目录；
-4. 生产部署前修改管理员、MySQL 和 Redis 相关凭据；
-5. 生产环境设置 `APP_ENV=production`、`APP_DEBUG=false`；
-6. Adminer 不应直接暴露到公网。
+1. 提交本次更新的 `HANDOFF.md`；
+2. 确认提交 `e2143ab` 和后续交接提交已推送到 `origin/main`；
+3. 真实联调前申请抖店开放平台抖客资质、授权和相关 API 权限；
+4. 取得真实 AppKey、AppSecret、AccessToken、PID 后关闭 Mock 模式，使用真实口令验证转链和账单字段映射；
+5. 生产部署前修改管理员、MySQL 和 Redis 相关凭据；
+6. 生产环境设置 `APP_ENV=production`、`APP_DEBUG=false`；
+7. Adminer 不应直接暴露到公网。
 
 ## 常用操作
 

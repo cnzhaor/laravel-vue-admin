@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\DouyinRebateController;
 use App\Http\Controllers\Api\LogController;
 use App\Http\Controllers\Api\ResourceController;
 use App\Http\Controllers\Api\RoleController;
@@ -13,6 +14,12 @@ Route::middleware('web')->prefix('v1')->group(function () {
     Route::middleware('auth:sanctum')->group(function () {
         Route::get('me', [AuthController::class, 'me']);
         Route::post('logout', [AuthController::class, 'logout']);
+
+        Route::prefix('douyin-rebate')->group(function () {
+            Route::get('status', [DouyinRebateController::class, 'status']);
+            Route::post('convert', [DouyinRebateController::class, 'convert'])->middleware('throttle:30,1');
+            Route::get('bills', [DouyinRebateController::class, 'bills'])->middleware('throttle:30,1');
+        });
 
         Route::apiResource('users', UserController::class)->except('show')->middleware('permission:system:user:manage');
         Route::apiResource('roles', RoleController::class)->except('show')->middleware('permission:system:role:manage');

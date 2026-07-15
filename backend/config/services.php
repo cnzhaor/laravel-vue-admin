@@ -2,6 +2,16 @@
 
 return [
 
+    'douyin_rebate' => [
+        'mock' => env('DOUYIN_REBATE_MOCK', true),
+        'endpoint' => env('DOUYIN_API_ENDPOINT', 'https://openapi-fxg.jinritemai.com'),
+        'app_key' => env('DOUYIN_APP_KEY'),
+        'app_secret' => env('DOUYIN_APP_SECRET'),
+        'access_token' => env('DOUYIN_ACCESS_TOKEN'),
+        'pid' => env('DOUYIN_PID'),
+        'timeout' => (int) env('DOUYIN_API_TIMEOUT', 10),
+    ],
+
     /*
     |--------------------------------------------------------------------------
     | Third Party Services

@@ -181,6 +181,26 @@ ADMINER_PORT=8081
 - `queue` 与 `scheduler` 作为独立常驻容器运行；
 - 数据库存储 UTC 时间，前端按照浏览器本地时区显示。
 
+## 抖音返利 Demo
+
+登录后台后访问「抖音返利 Demo」，可演示抖口令/短链解析转链、渠道标识透传和抖客结算账单查询。默认启用 Mock 模式，不需要开放平台账号：
+
+```dotenv
+DOUYIN_REBATE_MOCK=true
+```
+
+切换真实接口前，需要在抖店开放平台创建应用，取得「联盟抖客」授权，并申请「抖客分销转链」和账单查询相关权限。然后在 `backend/.env` 配置：
+
+```dotenv
+DOUYIN_REBATE_MOCK=false
+DOUYIN_APP_KEY=你的AppKey
+DOUYIN_APP_SECRET=你的AppSecret
+DOUYIN_ACCESS_TOKEN=抖客授权AccessToken
+DOUYIN_PID=dy_xxx_xxx_xxx
+```
+
+修改后执行 `docker compose exec app php artisan optimize:clear`。AppSecret 和 AccessToken 只保存在后端，前端不会接触密钥。真实模式使用 `buyin.doukeCommandParseAndShare` 完成解析转链，使用 `buyin.douKeSettleBillList` 查询单日结算账单。
+
 ## 常见问题
 
 ### 页面打开后白屏

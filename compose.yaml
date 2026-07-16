@@ -20,8 +20,19 @@ services:
     build:
       context: .
       dockerfile: deploy/php/Dockerfile
+    init: true
+    restart: unless-stopped
     working_dir: /var/www/backend
-    command: php artisan queue:work --sleep=3 --tries=3 --timeout=90
+    command:
+      - php
+      - artisan
+      - queue:work
+      - --sleep=3
+      - --tries=3
+      - --backoff=5
+      - --timeout=80
+      - --max-time=3600
+    stop_grace_period: 100s
     volumes:
       - ./backend:/var/www/backend
     env_file:

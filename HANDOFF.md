@@ -1,6 +1,6 @@
 # 项目交接记录
 
-更新时间：2026-07-15（Asia/Shanghai）
+更新时间：2026-07-16（Asia/Shanghai）
 
 ## 仓库信息
 
@@ -8,7 +8,7 @@
 - 当前分支：`main`
 - 远程分支：`origin/main`
 - 当前最新提交：`e2143ab feat: 添加抖音返利功能，包括接口配置、控制器、服务和前端页面`
-- 更新本交接文件前工作区干净；更新后仅 `HANDOFF.md` 为未提交改动
+- 当前工作区包含 Redis Worker 生产化配置、监控、测试和文档的未提交改动
 
 ## 当前运行状态
 
@@ -17,12 +17,13 @@ Laravel 13 + Vue 3 通用管理后台已经在 Docker Compose 中正常运行。
 | 服务 | 状态/地址 |
 | --- | --- |
 | 管理后台 | <http://localhost:8080> |
+| Redis 队列演示 | <http://localhost:8080/monitor/queue-demo> |
 | 抖音返利 Demo | <http://localhost:8080/marketing/douyin-rebate> |
 | Laravel 健康检查 | <http://localhost:8080/up> |
 | Adminer | <http://localhost:8081>，仅监听 `127.0.0.1` |
 | MySQL | 容器内 `mysql:3306`，健康 |
 | Redis | 容器内 `redis:6379`，健康 |
-| Queue / Scheduler | 常驻运行 |
+| Queue / Scheduler | 常驻运行；Queue 异常退出自动重启 |
 
 后台默认开发账号：
 
@@ -50,12 +51,31 @@ Adminer 登录信息：
 - 操作日志和登录日志
 - 中文登录页、后台布局、动态菜单、路由守卫和面包屑
 - Docker 初始化脚本、健康检查、队列、定时任务和 GitHub Actions
+- Redis 队列演示：登录用户可提交真实异步任务并实时查看 Worker 状态
 - Adminer 数据库可视化工具，仅允许本机访问
 - 日志时间按浏览器本地时区格式化显示
 - 抖音电商抖客返利 Demo：口令/短链解析转链、渠道归因、推广素材展示和结算账单查询
 - 抖音 API HMAC-SHA256 签名、业务参数递归排序、密钥后端隔离及 Mock/Live 双模式
 
 ## 本轮处理记录
+
+### Redis Worker 完善
+
+- Queue 容器增加 `restart: unless-stopped` 和 init 进程，异常退出后可自动恢复；
+- Worker 使用 80 秒超时、90 秒 `retry_after`、5 秒退避和 100 秒停止宽限，避免超时任务重复执行并支持优雅停止；
+- Worker 每运行 3600 秒主动回收，由 Docker 自动拉起；
+- Redis 空队列使用 5 秒阻塞等待，降低无任务时的轮询开销；
+- Redis 队列默认在数据库事务提交后派发；
+- Scheduler 每分钟检查队列积压，达到 100 个任务时写入结构化警告日志；
+- 新增队列安全默认值与积压日志测试。
+
+### Redis 队列演示任务
+
+- 新增 `ProcessQueueDemo` 异步 Job，可模拟 1–10 秒后台处理；
+- 任务状态通过 Redis 缓存 1 小时，包含等待、处理、完成和失败状态；
+- 新增已登录用户的任务提交与状态查询 API，包含参数校验、限流和任务归属检查；
+- 新增「Redis 队列演示」页面，自动轮询展示 Worker 执行进度、时间和结果；
+- 新增 API 派发、跨用户禁止访问和 Job 完成状态测试。
 
 ### 抖音返利 API Demo
 
@@ -134,7 +154,13 @@ docker compose restart frontend
 - Adminer 登录成功，可查看 `admin` 数据库中的 22 张表
 - 登录日志已验证显示北京时间，例如 UTC `06:56:23` 显示为 `14:56:23`
 - 前端 `vue-tsc` 和生产构建通过
-- Laravel 完整测试：8 个测试通过，12 个断言
+- Laravel 完整测试：13 个测试通过，29 个断言
+- `docker compose config --quiet` 通过
+- `php artisan schedule:list` 已确认 Redis 默认队列每分钟监控
+- `php artisan queue:restart` 端到端验证通过，Worker 优雅退出后由 Docker 自动拉起，重启计数为 1
+- 队列演示 2 条 API 路由已通过 `php artisan route:list --path=queue-demo` 检查
+- 前端 TypeScript 和生产构建通过
+- 浏览器实际验证通过：提交真实 Redis 任务后，页面从「等待 Worker」更新为「已完成」，耗时 5 秒，控制台无错误
 - 抖音服务单元测试：2 个测试通过，4 个断言，覆盖递归参数排序和 Mock 渠道归因/推广素材
 - 抖音返利 3 条路由已通过 `php artisan route:list --path=douyin-rebate` 检查
 - PHPUnit 使用内存 SQLite，不会清空开发 MySQL

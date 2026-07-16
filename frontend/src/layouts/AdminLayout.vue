@@ -21,6 +21,7 @@ async function logout() {
       <div class="brand">通用管理后台</div>
       <el-menu router :default-active="active" background-color="#17233d" text-color="#c7d2e6" active-text-color="#409eff">
         <el-menu-item index="/">工作台</el-menu-item>
+        <el-menu-item index="/monitor/queue-demo">Redis 队列演示</el-menu-item>
         <el-menu-item index="/marketing/douyin-rebate">抖音返利 Demo</el-menu-item>
         <SideMenu :items="auth.menus" />
       </el-menu>

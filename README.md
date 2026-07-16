@@ -11,6 +11,7 @@
 - 基于角色的菜单及接口权限控制
 - Cookie Session + Laravel Sanctum 登录认证
 - 队列与定时任务容器
+- Redis 异步队列任务演示
 - Adminer 数据库可视化管理
 
 ## 技术栈
@@ -60,6 +61,7 @@ chmod +x deploy/scripts/init.sh
 | 服务 | 地址 |
 | --- | --- |
 | 管理后台 | <http://localhost:8080> |
+| Redis 队列演示 | <http://localhost:8080/monitor/queue-demo> |
 | 健康检查 | <http://localhost:8080/up> |
 | Adminer | <http://localhost:8081> |
 
@@ -114,6 +116,10 @@ docker compose logs -f app
 docker compose logs -f frontend
 docker compose logs -f queue
 
+# 查看队列积压和失败任务
+docker compose exec app php artisan queue:monitor redis:default --max=100
+docker compose exec app php artisan queue:failed
+
 # Laravel 数据库操作
 docker compose exec app php artisan migrate
 docker compose exec app php artisan db:seed
@@ -148,6 +154,19 @@ ADMINER_PORT=8081
 
 `backend/.env` 控制 Laravel。修改数据库名、用户名或密码时，需要确保根目录 `.env` 与 `backend/.env` 保持一致。
 
+Redis 队列可通过以下变量调整：
+
+```dotenv
+QUEUE_CONNECTION=redis
+REDIS_QUEUE=default
+REDIS_QUEUE_RETRY_AFTER=90
+REDIS_QUEUE_BLOCK_FOR=5
+REDIS_QUEUE_AFTER_COMMIT=true
+QUEUE_MONITOR_MAX_JOBS=100
+```
+
+Worker 的任务超时为 80 秒，小于 Redis 的 90 秒重试窗口，避免卡住的任务在 Worker 退出前被重复领取。队列默认在数据库事务提交后才派发；如确定任务不依赖事务数据，可针对单个任务明确使用 `beforeCommit()`。
+
 ## 项目结构
 
 ```text
@@ -178,8 +197,20 @@ ADMINER_PORT=8081
 - Nginx 将页面请求转发至 Vite，将 `/api`、`/sanctum` 和 `/up` 转发至 Laravel；
 - Sanctum 使用 Cookie Session 和 CSRF 防护；
 - Redis 承担 Session、缓存和队列；
-- `queue` 与 `scheduler` 作为独立常驻容器运行；
+- `queue` 与 `scheduler` 作为独立常驻容器运行；`queue` 异常退出后会自动重启，并每小时主动回收 Worker 以释放长期运行积累的内存；
+- Scheduler 每分钟监控 Redis 默认队列，待处理任务达到 `QUEUE_MONITOR_MAX_JOBS` 时写入结构化警告日志；
 - 数据库存储 UTC 时间，前端按照浏览器本地时区显示。
+
+## Redis 队列演示
+
+登录后访问「Redis 队列演示」，可提交一个 1–10 秒的模拟任务。提交接口立即返回任务 ID，页面轮询展示「等待 Worker → 执行中 → 已完成/失败」。任务状态保存在 Redis 中 1 小时，且只有创建者可查看。
+
+API：
+
+- `POST /api/v1/queue-demo/jobs`：提交任务，参数为 `message` 和 `delay_seconds`；
+- `GET /api/v1/queue-demo/jobs/{taskId}`：查询当前登录用户的任务状态。
+
+两个接口均需要 Sanctum 登录状态，提交接口限制为每用户每分钟 10 次。
 
 ## 抖音返利 Demo
 
@@ -225,6 +256,15 @@ APP_PORT=8088
 
 ```bash
 docker compose up -d
+```
+
+### Queue 容器退出
+
+`queue` 已配置 `restart: unless-stopped`，异常退出时 Docker 会自动拉起。若容器被手动停止，可执行：
+
+```bash
+docker compose up -d queue
+docker compose logs --tail=100 queue
 ```
 
 ### 查看数据库连接状态

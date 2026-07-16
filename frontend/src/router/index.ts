@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import AdminLayout from '../layouts/AdminLayout.vue'
 import LoginView from '../views/LoginView.vue'
+import QueueDemoView from '../views/QueueDemoView.vue'
 import DashboardView from '../views/DashboardView.vue'
 import CrudView from '../views/CrudView.vue'
 import DouyinRebateView from '../views/DouyinRebateView.vue'
@@ -13,6 +14,7 @@ const routes = [
     component: AdminLayout,
     children: [
       { path: '', component: DashboardView, meta: { title: '工作台' } },
+      { path: 'monitor/queue-demo', component: QueueDemoView, meta: { title: 'Redis 队列演示' } },
       { path: 'marketing/douyin-rebate', component: DouyinRebateView, meta: { title: '抖音返利 Demo' } },
       { path: 'system/users', component: CrudView, props: { resource: 'users' }, meta: { title: '用户管理' } },
       { path: 'system/roles', component: CrudView, props: { resource: 'roles' }, meta: { title: '角色管理' } },

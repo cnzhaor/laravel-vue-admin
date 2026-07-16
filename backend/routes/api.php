@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\DouyinRebateController;
 use App\Http\Controllers\Api\LogController;
+use App\Http\Controllers\Api\QueueDemoController;
 use App\Http\Controllers\Api\ResourceController;
 use App\Http\Controllers\Api\RoleController;
 use App\Http\Controllers\Api\UserController;
@@ -14,6 +15,11 @@ Route::middleware('web')->prefix('v1')->group(function () {
     Route::middleware('auth:sanctum')->group(function () {
         Route::get('me', [AuthController::class, 'me']);
         Route::post('logout', [AuthController::class, 'logout']);
+
+        Route::prefix('queue-demo')->group(function () {
+            Route::post('jobs', [QueueDemoController::class, 'store'])->middleware('throttle:10,1');
+            Route::get('jobs/{taskId}', [QueueDemoController::class, 'show'])->whereUuid('taskId');
+        });
 
         Route::prefix('douyin-rebate')->group(function () {
             Route::get('status', [DouyinRebateController::class, 'status']);

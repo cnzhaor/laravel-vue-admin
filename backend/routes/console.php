@@ -9,3 +9,7 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 Schedule::command('model:prune')->dailyAt('02:00');
+Schedule::command('queue:monitor', [
+    'queues' => 'redis:'.config('queue.connections.redis.queue', 'default'),
+    '--max' => config('queue.monitor.max_jobs', 100),
+])->everyMinute()->withoutOverlapping();

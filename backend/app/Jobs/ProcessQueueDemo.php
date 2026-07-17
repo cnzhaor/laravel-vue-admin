@@ -28,19 +28,21 @@ class ProcessQueueDemo implements ShouldQueue
             return;
         }
 
-        $tasks->markProcessing($this->taskId);
-        sleep((int) $task['delay_seconds']);
+        if (! $tasks->markProcessing($this->taskId)) {
+            return;
+        }
+
         $tasks->markCompleted(
             $this->taskId,
-            "Worker 已完成任务：{$task['message']}",
+            "Worker 已执行延迟任务：{$task['message']}",
         );
     }
 
-    public function failed(?Throwable $exception): void
+    public function failed(?Throwable $_exception): void
     {
         app(QueueDemoService::class)->markFailed(
             $this->taskId,
-            $exception?->getMessage() ?: '任务执行失败',
+            '任务执行失败，请联系管理员',
         );
     }
 }

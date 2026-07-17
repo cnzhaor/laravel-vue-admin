@@ -24,9 +24,10 @@ class QueueDemoController extends ApiController
             $data['delay_seconds'],
         );
 
-        ProcessQueueDemo::dispatch($task['id']);
+        ProcessQueueDemo::dispatch((string) $task['id'])
+            ->delay((int) $task['delay_seconds']);
 
-        return $this->success($task, '任务已提交到 Redis 队列', 202);
+        return $this->success($task, '延迟任务已提交到 Redis 队列', 202);
     }
 
     public function show(Request $request, string $taskId): JsonResponse

@@ -1,14 +1,14 @@
 # 项目交接记录
 
-更新时间：2026-07-16（Asia/Shanghai）
+更新时间：2026-07-17（Asia/Shanghai）
 
 ## 仓库信息
 
 - GitHub：<https://github.com/cnzhaor/laravel-vue-admin>
 - 当前分支：`main`
 - 远程分支：`origin/main`
-- 当前最新提交：`e2143ab feat: 添加抖音返利功能，包括接口配置、控制器、服务和前端页面`
-- 当前工作区包含 Redis Worker 生产化配置、监控、测试和文档的未提交改动
+- 当前最新提交：`25f17a3 feat: 添加 Redis 队列演示功能，包括任务提交、状态查询和相关 API`
+- 当前工作区包含开发审查规则、Redis 延迟队列修复和技术文档的未提交改动
 
 ## 当前运行状态
 
@@ -51,7 +51,7 @@ Adminer 登录信息：
 - 操作日志和登录日志
 - 中文登录页、后台布局、动态菜单、路由守卫和面包屑
 - Docker 初始化脚本、健康检查、队列、定时任务和 GitHub Actions
-- Redis 队列演示：登录用户可提交真实异步任务并实时查看 Worker 状态
+- Redis 队列演示：登录用户可提交真实延迟任务并查看 Worker 状态
 - Adminer 数据库可视化工具，仅允许本机访问
 - 日志时间按浏览器本地时区格式化显示
 - 抖音电商抖客返利 Demo：口令/短链解析转链、渠道归因、推广素材展示和结算账单查询
@@ -71,11 +71,13 @@ Adminer 登录信息：
 
 ### Redis 队列演示任务
 
-- 新增 `ProcessQueueDemo` 异步 Job，可模拟 1–10 秒后台处理；
-- 任务状态通过 Redis 缓存 1 小时，包含等待、处理、完成和失败状态；
+- `ProcessQueueDemo` 改用 Laravel `dispatch()->delay()` 实现 1–10 秒真实延迟，删除 Job 内的 `sleep()`，等待期间不占用 Worker；
+- 任务状态通过 Redis 缓存 1 小时，新增 `available_at` 预计可执行时间，并包含等待、处理、完成和失败状态；
 - 新增已登录用户的任务提交与状态查询 API，包含参数校验、限流和任务归属检查；
-- 新增「Redis 队列演示」页面，自动轮询展示 Worker 执行进度、时间和结果；
-- 新增 API 派发、跨用户禁止访问和 Job 完成状态测试。
+- 「Redis 队列演示」页面已同步延迟等待语义，展示创建时间、预计可执行时间、开始时间和结果；
+- 测试新增 delay 派发属性、1–10 秒边界校验和延迟等待期状态断言；
+- 独立 Review 后增加 Redis Cache 锁保护的单调状态转换、延迟到期后的“等待 Worker”文案、失败信息脱敏及重复投递/终态测试；
+- 新增 `docs/redis-queue.md`，记录架构、配置、Redis 数据结构、状态机、API、重试幂等、监控、部署、测试和故障排查。
 
 ### 抖音返利 API Demo
 
@@ -154,13 +156,17 @@ docker compose restart frontend
 - Adminer 登录成功，可查看 `admin` 数据库中的 22 张表
 - 登录日志已验证显示北京时间，例如 UTC `06:56:23` 显示为 `14:56:23`
 - 前端 `vue-tsc` 和生产构建通过
-- Laravel 完整测试：13 个测试通过，29 个断言
+- Laravel 完整测试：15 个测试通过，52 个断言
 - `docker compose config --quiet` 通过
 - `php artisan schedule:list` 已确认 Redis 默认队列每分钟监控
 - `php artisan queue:restart` 端到端验证通过，Worker 优雅退出后由 Docker 自动拉起，重启计数为 1
 - 队列演示 2 条 API 路由已通过 `php artisan route:list --path=queue-demo` 检查
 - 前端 TypeScript 和生产构建通过
-- 浏览器实际验证通过：提交真实 Redis 任务后，页面从「等待 Worker」更新为「已完成」，耗时 5 秒，控制台无错误
+- 浏览器已提交 10 秒延迟任务并观察到「延迟等待 → 已完成」；Redis `MONITOR` 确认 Job 先写入 `queues:default:delayed`，到期后才进入 `reserved`，Worker 在同一秒完成处理，浏览器控制台无告警或错误
+- 独立 Review 发现并已修正 4 项问题：终态回退、延迟到期后文案、异常详情泄露、失败与重复投递测试缺口
+- 独立复核确认上述 4 项均已关闭，当前 diff 未发现新的 P1/P2 问题；真实并发锁竞争测试可作为后续 P3 增强
+- 真实 Redis Cache 已验证重复 `handle()` 和后续 `failed()` 不会覆盖 `completed` 终态，状态与结果保持不变
+- 修正 Scheduler 调用 `queue:monitor` 时把位置参数误写为 `queues=redis:default` 的问题，避免每分钟监控任务失败
 - 抖音服务单元测试：2 个测试通过，4 个断言，覆盖递归参数排序和 Mock 渠道归因/推广素材
 - 抖音返利 3 条路由已通过 `php artisan route:list --path=douyin-rebate` 检查
 - PHPUnit 使用内存 SQLite，不会清空开发 MySQL
@@ -169,13 +175,12 @@ docker compose restart frontend
 
 ## 当前待办
 
-1. 提交本次更新的 `HANDOFF.md`；
-2. 确认提交 `e2143ab` 和后续交接提交已推送到 `origin/main`；
-3. 真实联调前申请抖店开放平台抖客资质、授权和相关 API 权限；
-4. 取得真实 AppKey、AppSecret、AccessToken、PID 后关闭 Mock 模式，使用真实口令验证转链和账单字段映射；
-5. 生产部署前修改管理员、MySQL 和 Redis 相关凭据；
-6. 生产环境设置 `APP_ENV=production`、`APP_DEBUG=false`；
-7. Adminer 不应直接暴露到公网。
+1. 按需提交当前未提交改动；
+2. 真实联调前申请抖店开放平台抖客资质、授权和相关 API 权限；
+3. 取得真实 AppKey、AppSecret、AccessToken、PID 后关闭 Mock 模式，使用真实口令验证转链和账单字段映射；
+4. 生产部署前修改管理员、MySQL 和 Redis 相关凭据；
+5. 生产环境设置 `APP_ENV=production`、`APP_DEBUG=false`；
+6. Adminer 不应直接暴露到公网。
 
 ## 常用操作
 

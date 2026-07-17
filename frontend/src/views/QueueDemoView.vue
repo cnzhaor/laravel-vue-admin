@@ -12,12 +12,20 @@ const submitting = ref(false)
 const task = ref<QueueDemoTask | null>(null)
 let pollingTimer: ReturnType<typeof setTimeout> | undefined
 
-const statusText: Record<QueueDemoStatus, string> = {
-  queued: '等待 Worker',
+const statusText: Record<Exclude<QueueDemoStatus, 'queued'>, string> = {
   processing: '执行中',
   completed: '已完成',
   failed: '执行失败',
 }
+const isDelayPending = computed(() => (
+  task.value?.status === 'queued' && Date.now() < Date.parse(task.value.available_at)
+))
+const currentStatusText = computed(() => {
+  if (!task.value) return ''
+  return task.value.status === 'queued'
+    ? (isDelayPending.value ? '延迟等待' : '等待 Worker')
+    : statusText[task.value.status]
+})
 const statusType = computed(() => {
   if (task.value?.status === 'completed') return 'success'
   if (task.value?.status === 'failed') return 'danger'
@@ -26,9 +34,17 @@ const statusType = computed(() => {
 })
 const activeStep = computed(() => {
   if (!task.value) return 0
-  if (task.value.status === 'queued') return 1
-  if (task.value.status === 'processing') return 2
+  if (task.value.status === 'queued') return isDelayPending.value ? 0 : 1
+  if (task.value.status === 'processing') return 1
+  if (task.value.status === 'failed') return 2
   return 3
+})
+const stepProcessStatus = computed(() => task.value?.status === 'failed' ? 'error' : 'process')
+const resultText = computed(() => {
+  if (!task.value) return ''
+  if (task.value.result) return task.value.result
+  if (task.value.status === 'processing') return 'Worker 正在执行…'
+  return isDelayPending.value ? '等待延迟时间到期…' : '等待 Worker 领取任务…'
 })
 
 function errorMessage(error: unknown): string {
@@ -84,7 +100,7 @@ onUnmounted(stopPolling)
 <template>
   <div class="queue-demo">
     <el-alert
-      title="此页会创建真实的 Redis 队列任务，由独立 Queue Worker 异步执行。"
+      title="此页会创建真实的 Redis 延迟任务；等待期间不占用 Worker，到期后由独立 Queue Worker 执行。"
       type="info"
       :closable="false"
       show-icon
@@ -98,11 +114,11 @@ onUnmounted(stopPolling)
             <el-form-item label="演示内容">
               <el-input v-model="form.message" maxlength="100" show-word-limit />
             </el-form-item>
-            <el-form-item label="模拟处理时间">
+            <el-form-item label="延迟执行时间">
               <el-slider v-model="form.delaySeconds" :min="1" :max="10" show-input />
             </el-form-item>
             <el-button type="primary" :loading="submitting" @click="submitTask">
-              提交到 Redis 队列
+              提交延迟任务
             </el-button>
           </el-form>
         </el-card>
@@ -113,25 +129,26 @@ onUnmounted(stopPolling)
           <template #header>
             <div class="card-title">
               <strong>2. Worker 执行状态</strong>
-              <el-tag v-if="task" :type="statusType">{{ statusText[task.status] }}</el-tag>
+              <el-tag v-if="task" :type="statusType">{{ currentStatusText }}</el-tag>
             </div>
           </template>
 
           <el-empty v-if="!task" description="提交任务后，这里会实时显示处理进度" />
           <template v-else>
-            <el-steps :active="activeStep" finish-status="success" align-center>
-              <el-step title="已入队" />
-              <el-step title="Worker 领取" />
-              <el-step title="处理完成" />
+            <el-steps :active="activeStep" :process-status="stepProcessStatus" finish-status="success" align-center>
+              <el-step title="Redis 延迟等待" />
+              <el-step title="Worker 领取并执行" />
+              <el-step title="执行完成" />
             </el-steps>
 
             <el-descriptions :column="1" border class="task-details">
               <el-descriptions-item label="任务 ID"><span class="task-id">{{ task.id }}</span></el-descriptions-item>
               <el-descriptions-item label="演示内容">{{ task.message }}</el-descriptions-item>
               <el-descriptions-item label="创建时间">{{ formatTime(task.created_at) }}</el-descriptions-item>
+              <el-descriptions-item label="预计可执行时间">{{ formatTime(task.available_at) }}</el-descriptions-item>
               <el-descriptions-item label="开始时间">{{ formatTime(task.started_at) }}</el-descriptions-item>
               <el-descriptions-item label="完成时间">{{ formatTime(task.finished_at) }}</el-descriptions-item>
-              <el-descriptions-item label="Worker 结果">{{ task.result || '等待中…' }}</el-descriptions-item>
+              <el-descriptions-item label="Worker 结果">{{ resultText }}</el-descriptions-item>
             </el-descriptions>
           </template>
         </el-card>

@@ -29,6 +29,7 @@ export interface QueueDemoTask {
   status: QueueDemoStatus
   result: string | null
   created_at: string
+  available_at: string
   started_at: string | null
   finished_at: string | null
 }

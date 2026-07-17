@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 
@@ -9,11 +10,16 @@ class QueueDemoService
 {
     private const CACHE_TTL_MINUTES = 60;
 
+    private const LOCK_SECONDS = 5;
+
+    private const LOCK_WAIT_SECONDS = 2;
+
     /**
      * @return array<string, int|string|null>
      */
     public function create(int $userId, string $message, int $delaySeconds): array
     {
+        $createdAt = CarbonImmutable::now('UTC');
         $task = [
             'id' => (string) Str::uuid(),
             'user_id' => $userId,
@@ -21,7 +27,8 @@ class QueueDemoService
             'delay_seconds' => $delaySeconds,
             'status' => 'queued',
             'result' => null,
-            'created_at' => now()->utc()->toIso8601String(),
+            'created_at' => $createdAt->toIso8601String(),
+            'available_at' => $createdAt->addSeconds($delaySeconds)->toIso8601String(),
             'started_at' => null,
             'finished_at' => null,
         ];
@@ -41,26 +48,26 @@ class QueueDemoService
         return is_array($task) ? $task : null;
     }
 
-    public function markProcessing(string $taskId): void
+    public function markProcessing(string $taskId): bool
     {
-        $this->update($taskId, [
+        return $this->transition($taskId, ['queued', 'processing'], [
             'status' => 'processing',
             'started_at' => now()->utc()->toIso8601String(),
         ]);
     }
 
-    public function markCompleted(string $taskId, string $result): void
+    public function markCompleted(string $taskId, string $result): bool
     {
-        $this->update($taskId, [
+        return $this->transition($taskId, ['processing'], [
             'status' => 'completed',
             'result' => $result,
             'finished_at' => now()->utc()->toIso8601String(),
         ]);
     }
 
-    public function markFailed(string $taskId, string $message): void
+    public function markFailed(string $taskId, string $message): bool
     {
-        $this->update($taskId, [
+        return $this->transition($taskId, ['queued', 'processing'], [
             'status' => 'failed',
             'result' => $message,
             'finished_at' => now()->utc()->toIso8601String(),
@@ -68,17 +75,27 @@ class QueueDemoService
     }
 
     /**
+     * @param  list<string>  $allowedStatuses
      * @param  array<string, int|string|null>  $changes
      */
-    private function update(string $taskId, array $changes): void
+    private function transition(string $taskId, array $allowedStatuses, array $changes): bool
     {
-        $task = $this->find($taskId);
+        return Cache::lock($this->lockKey($taskId), self::LOCK_SECONDS)
+            ->block(self::LOCK_WAIT_SECONDS, function () use ($taskId, $allowedStatuses, $changes): bool {
+                $task = $this->find($taskId);
 
-        if ($task === null) {
-            return;
-        }
+                if ($task === null || ! in_array($task['status'], $allowedStatuses, true)) {
+                    return false;
+                }
 
-        $this->store(array_merge($task, $changes));
+                if ($task['status'] === $changes['status']) {
+                    return true;
+                }
+
+                $this->store(array_merge($task, $changes));
+
+                return true;
+            });
     }
 
     /**
@@ -96,5 +113,10 @@ class QueueDemoService
     private function key(string $taskId): string
     {
         return "queue-demo:task:{$taskId}";
+    }
+
+    private function lockKey(string $taskId): string
+    {
+        return "queue-demo:task:{$taskId}:lock";
     }
 }
